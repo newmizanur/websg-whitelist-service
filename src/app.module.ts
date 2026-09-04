@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
+import { createTypeOrmOptions } from './database/typeorm-options.js';
+import { WhitelistModule } from './whitelist/whitelist.module.js';
 
 @Module({
-  imports: [],
+  imports: [TypeOrmModule.forRoot(createTypeOrmOptions()), WhitelistModule],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [],
 })
 export class AppModule {}

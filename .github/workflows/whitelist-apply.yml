@@ -1,0 +1,72 @@
+name: Whitelist Terraform Apply
+
+# NOTE: infra-reference/ (see infra-reference/README.md) is an illustrative
+# stand-in for the real infra repo's isolated whitelist module (section 3d). This
+# workflow's shape — trigger, path scoping, plan-guard, webhook callback — is
+# functional and would work as-is against a real infra repo; only the
+# `working-directory` below and the backend/credentials in main.tf are
+# placeholders.
+
+on:
+  push:
+    branches:
+      - whitelist-updates
+    paths:
+      - infra-reference/**
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra-reference
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan
+        run: terraform plan -input=false -out=tfplan -var-file=ip_whitelist.tfvars.json
+
+      # section 3d defense in depth: even with isolated state, abort rather than
+      # auto-applying if the plan touches anything beyond the expected
+      # aws_wafv2_ip_set.
+      - name: Guard plan scope
+        run: |
+          terraform show -json tfplan \
+            | jq -e '[.resource_changes[].type] | unique == ["aws_wafv2_ip_set"]'
+
+      - name: Terraform Apply
+        id: apply
+        run: terraform apply -input=false -auto-approve tfplan
+
+      # section 3a step 5 / section 6: report the outcome back to the whitelist service so
+      # it can move the covered rows from committed to applied/failed.
+      - name: Notify whitelist service
+        if: always()
+        env:
+          WHITELIST_WEBHOOK_URL: ${{ secrets.WHITELIST_WEBHOOK_URL }}
+          WHITELIST_WEBHOOK_SECRET: ${{ secrets.WHITELIST_WEBHOOK_SECRET }}
+        run: |
+          status="success"
+          if [ "${{ steps.apply.outcome }}" != "success" ]; then
+            status="failure"
+          fi
+
+          body=$(jq -n --arg status "$status" --arg commitSha "${{ github.sha }}" \
+            '{status: $status, commitSha: $commitSha}')
+
+          signature="sha256=$(printf '%s' "$body" \
+            | openssl dgst -sha256 -hmac "$WHITELIST_WEBHOOK_SECRET" \
+            | sed 's/^.* //')"
+
+          curl -fsSL -X POST "$WHITELIST_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $signature" \
+            -d "$body"

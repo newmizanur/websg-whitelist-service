@@ -1,0 +1,13 @@
+node_modules
+.pnpm-store
+dist
+coverage
+.git
+tsconfig.build.tsbuildinfo
+
+# Never bake real secrets into an image layer
+.env
+.env.*
+!.env.example
+
+*.log

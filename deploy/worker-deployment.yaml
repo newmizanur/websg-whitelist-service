@@ -1,0 +1,78 @@
+# REFERENCE ARTIFACT — see deploy/README.md. Illustrates what an ArgoCD-managed
+# GitOps pipeline would reconcile for the batching worker; not applied against
+# any real cluster as part of this submission. Built from Dockerfile.worker.
+#
+# No Service (the worker serves no HTTP traffic — src/worker.ts never calls
+# app.listen()) and deliberately no HorizontalPodAutoscaler, unlike the API
+# tier.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: websg-whitelist-worker-config
+  namespace: websg-whitelist
+data:
+  DB_HOST: "postgres.websg-whitelist.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "websg_whitelist"
+  DB_USERNAME: "postgres"
+  WHITELIST_BATCH_INTERVAL_MS: "30000"
+  WHITELIST_GITHUB_OWNER: "your-org"
+  WHITELIST_GITHUB_REPO: "your-infra-repo"
+  WHITELIST_GITHUB_PATH: "cms-whitelist/ip_whitelist.tfvars.json"
+  WHITELIST_GITHUB_BRANCH: "main"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: websg-whitelist-worker
+  namespace: websg-whitelist
+  labels:
+    app: websg-whitelist-worker
+spec:
+  # Fixed at 1, not autoscaled — per docs/system_design.md section 3c, the
+  # worker skips a distributed concurrent-run guard specifically because it
+  # runs single-replica. Scaling this out would let two workers race to
+  # publish the same batch: duplicate Git commits and duplicate
+  # `terraform apply` runs for what should be one change.
+  replicas: 1
+  # Recreate (not the default RollingUpdate) so a deploy fully terminates the
+  # old pod before starting the new one — no window where two replicas run
+  # at once, which is exactly the scenario the single-replica assumption
+  # above depends on not happening.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: websg-whitelist-worker
+  template:
+    metadata:
+      labels:
+        app: websg-whitelist-worker
+    spec:
+      containers:
+        - name: worker
+          # Pushed to a registry by CI from Dockerfile.worker, not built
+          # in-cluster. Placeholder tag — a real pipeline would pin an
+          # immutable tag or digest per release, not `latest`.
+          image: <registry>/websg-whitelist-worker:latest
+          envFrom:
+            - configMapRef:
+                name: websg-whitelist-worker-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: websg-whitelist-secrets
+                  key: DB_PASSWORD
+            - name: WHITELIST_GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: websg-whitelist-secrets
+                  key: WHITELIST_GITHUB_TOKEN
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

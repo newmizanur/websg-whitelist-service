@@ -1,0 +1,25 @@
+# Builds and runs the HTTP API (src/main.ts). See Dockerfile.worker for the
+# batching worker's separate image — they share this same build shape but
+# ship as distinct images/containers, per docker-compose.yml.
+
+FROM node:24-alpine AS deps
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS build
+COPY . .
+RUN pnpm build
+
+FROM node:24-alpine AS runtime
+RUN corepack enable
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+COPY --from=build /app/dist ./dist
+
+USER node
+EXPOSE 3000
+CMD ["node", "dist/main.js"]

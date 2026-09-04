@@ -1,0 +1,83 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: websg-whitelist-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-websg_whitelist}
+    ports:
+      - '${DB_PORT:-5432}:5432'
+    volumes:
+      - websg_whitelist_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-websg_whitelist}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-off: runs pending migrations then exits. Targets the `build` stage
+  # (not the lean `runtime` one api/worker use) because migration:run needs
+  # ts-node + the TypeORM CLI (devDependencies) and the TS source itself —
+  # none of which exist in the prod-only runtime image.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: build
+    container_name: websg-whitelist-migrate
+    command: pnpm migration:run
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Built from Dockerfile.api — dependencies and the compiled dist/ are baked
+  # into the image at build time, so rebuild (`docker compose build api`)
+  # after code changes rather than expecting live reload. A Helm chart +
+  # ArgoCD manifests for real deployment are a planned follow-up.
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: websg-whitelist-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # .env's DB_HOST is for running on the host (pnpm start) — from inside
+      # this container "localhost" would mean the container itself, so it's
+      # overridden to the compose network's postgres service name.
+      DB_HOST: postgres
+    ports:
+      - '${PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Built from Dockerfile.worker — same image shape as api, separate image,
+  # no HTTP port. Rebuild (`docker compose build worker`) after code changes.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: websg-whitelist-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  websg_whitelist_pgdata:

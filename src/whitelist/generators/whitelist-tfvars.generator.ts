@@ -1,4 +1,5 @@
 import type { WhitelistEntry } from '../entities/whitelist-entry.entity.js';
+import { normalizeWhitelistIpAddress } from '../validators/is-whitelist-ip-address.validator.js';
 
 export interface WhitelistTfvarsEntryMetadata {
   tenant: string;
@@ -32,9 +33,15 @@ export function buildWhitelistTfvars(
   const earliestByIp = new Map<string, WhitelistEntry>();
 
   for (const entry of activeEntries) {
-    const current = earliestByIp.get(entry.ip);
+    // AWS WAFv2 IPSet requires CIDR notation for every address — normalizing
+    // here (not just at write-time in IpAddressesService) is what's needed
+    // for the generator's own output contract to actually be guaranteed
+    // rather than just assumed, and it also correctly dedups a legacy
+    // un-normalized row against its CIDR-form equivalent.
+    const ip = normalizeWhitelistIpAddress(entry.ip);
+    const current = earliestByIp.get(ip);
     if (!current || isEarlierAttribution(entry, current)) {
-      earliestByIp.set(entry.ip, entry);
+      earliestByIp.set(ip, entry);
     }
   }
 

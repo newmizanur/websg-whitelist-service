@@ -1,0 +1,1 @@
+export const WHITELIST_PUBLISHER = Symbol('WHITELIST_PUBLISHER');

@@ -1,6 +1,7 @@
 import { getMetadataArgsStorage } from 'typeorm';
 import { describe, expect, it } from 'vitest';
 import {
+  ACTIVE_WHITELIST_ENTRY_STATUSES,
   WhitelistEntry,
   WhitelistEntryStatus,
 } from './whitelist-entry.entity.js';
@@ -73,5 +74,30 @@ describe('WhitelistEntry', () => {
     const columns = unique!.columns as string[];
     expect(columns).toEqual(expect.arrayContaining(['tenantId', 'ip']));
     expect(columns).toHaveLength(2);
+  });
+
+  it('supports a removed status for tenant-initiated soft-deletes', () => {
+    expect(WhitelistEntryStatus.REMOVED).toBe('removed');
+  });
+
+  it('excludes removed and failed entries from the active-status set used for content generation', () => {
+    expect(ACTIVE_WHITELIST_ENTRY_STATUSES).toEqual([
+      WhitelistEntryStatus.QUEUED,
+      WhitelistEntryStatus.COMMITTED,
+      WhitelistEntryStatus.APPLIED,
+    ]);
+  });
+
+  it('maps requestId to an indexed request_id column', () => {
+    const column = columnFor(WhitelistEntry, 'requestId');
+    const index = getMetadataArgsStorage().indices.find(
+      (i) =>
+        i.target === WhitelistEntry &&
+        (i.columns as string[])?.includes('requestId'),
+    );
+
+    expect(column.options.name).toBe('request_id');
+    expect(column.options.type).toBe('varchar');
+    expect(index).toBeDefined();
   });
 });

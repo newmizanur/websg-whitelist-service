@@ -1,0 +1,129 @@
+# REFERENCE ARTIFACT — see deploy/README.md. Illustrates what an ArgoCD-managed
+# GitOps pipeline would reconcile for the HTTP API tier; not applied against
+# any real cluster as part of this submission. Built from Dockerfile.api.
+#
+# Non-sensitive config lives in the ConfigMap below (values mirror
+# .env.example, adapted for in-cluster addressing, e.g. DB_HOST). The three
+# sensitive vars (DB_PASSWORD, WHITELIST_WEBHOOK_SECRET, WHITELIST_GITHUB_TOKEN)
+# are read from a `websg-whitelist-secrets` Secret assumed to be provisioned
+# out-of-band (e.g. External Secrets Operator, sealed-secrets) — no Secret
+# manifest is included here, illustrative or otherwise real secrets should
+# never be committed to Git.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: websg-whitelist-api-config
+  namespace: websg-whitelist
+data:
+  DB_HOST: "postgres.websg-whitelist.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "websg_whitelist"
+  DB_USERNAME: "postgres"
+  PORT: "3000"
+  WHITELIST_SWAGGER_ENABLED: "false"
+  WHITELIST_MAX_ENTRIES_PER_REQUEST: "50"
+  WHITELIST_GITHUB_OWNER: "your-org"
+  WHITELIST_GITHUB_REPO: "your-infra-repo"
+  WHITELIST_GITHUB_PATH: "cms-whitelist/ip_whitelist.tfvars.json"
+  WHITELIST_GITHUB_BRANCH: "main"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: websg-whitelist-api
+  namespace: websg-whitelist
+  labels:
+    app: websg-whitelist-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: websg-whitelist-api
+  template:
+    metadata:
+      labels:
+        app: websg-whitelist-api
+    spec:
+      containers:
+        - name: api
+          # Pushed to a registry by CI from Dockerfile.api, not built
+          # in-cluster. Placeholder tag — a real pipeline would pin an
+          # immutable tag or digest per release, not `latest`.
+          image: <registry>/websg-whitelist-api:latest
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: websg-whitelist-api-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: websg-whitelist-secrets
+                  key: DB_PASSWORD
+            - name: WHITELIST_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: websg-whitelist-secrets
+                  key: WHITELIST_WEBHOOK_SECRET
+            - name: WHITELIST_GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: websg-whitelist-secrets
+                  key: WHITELIST_GITHUB_TOKEN
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: websg-whitelist-api
+  namespace: websg-whitelist
+spec:
+  selector:
+    app: websg-whitelist-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+# The self-service HPA target proposed in docs/system_design.md's bonus
+# section (8) — this is that same idea applied to this service's own API
+# tier: scale on CPU utilization within a bounded min/max range.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: websg-whitelist-api
+  namespace: websg-whitelist
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: websg-whitelist-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

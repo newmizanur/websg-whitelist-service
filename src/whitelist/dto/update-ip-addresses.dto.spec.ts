@@ -55,6 +55,49 @@ describe('UpdateIpAddressesDto', () => {
     expect(addError?.constraints).toHaveProperty('isWhitelistIpAddress');
   });
 
+  it('names only the invalid entries in the error message, not the whole array', async () => {
+    const dto = makeDto({
+      add: ['1.1.1.1', 'not-an-ip', '8.8.8.0/24'],
+      remove: [],
+    });
+
+    const errors = await validate(dto);
+
+    const addError = errors.find((e) => e.property === 'add');
+    const message = addError?.constraints?.isWhitelistIpAddress ?? '';
+    expect(message).toContain('not-an-ip');
+    expect(message).not.toContain('1.1.1.1');
+    expect(message).not.toContain('8.8.8.0/24');
+  });
+
+  it('accepts a canonical CIDR range', async () => {
+    const dto = makeDto({ add: ['1.1.1.0/24'], remove: [] });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects a non-canonical CIDR with a clear "did you mean" message', async () => {
+    const dto = makeDto({ add: ['1.1.1.1/24'], remove: [] });
+
+    const errors = await validate(dto);
+
+    const addError = errors.find((e) => e.property === 'add');
+    const message = addError?.constraints?.isWhitelistIpAddress ?? '';
+    expect(message).toContain(
+      '1.1.1.1/24 is invalid; did you mean 1.1.1.0/24?',
+    );
+  });
+
+  it('accepts a /32 CIDR (host bits are the whole address, always canonical)', async () => {
+    const dto = makeDto({ add: ['8.8.8.8/32'], remove: [] });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
   it('rejects a private-range entry in remove', async () => {
     const dto = makeDto({ add: [], remove: ['192.168.1.1'] });
 

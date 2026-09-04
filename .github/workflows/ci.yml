@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # e2e tests hit a real Postgres (README's Testing boundary — no mocked DB
+    # for the full request lifecycle). Unit tests don't need this, but it's
+    # cheap to keep it up for the whole job.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: websg_whitelist
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d websg_whitelist"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: websg_whitelist
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 to match the Dockerfiles; corepack reads package.json's
+      # packageManager field to fetch the pinned pnpm version, same as
+      # Dockerfile.api/Dockerfile.worker's `deps` stage.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm build
+
+      - run: pnpm test
+
+      - run: pnpm migration:run
+
+      # No WHITELIST_GITHUB_* / WHITELIST_WEBHOOK_SECRET set here on purpose —
+      # test/setup-e2e.ts supplies a fixed webhook secret, and the publisher
+      # factory falls back to NoopPublisher without GitHub env vars, so this
+      # never makes a real network call (see CLAUDE.md).
+      - run: pnpm test:e2e
