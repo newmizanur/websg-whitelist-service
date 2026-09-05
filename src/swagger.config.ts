@@ -10,7 +10,7 @@ import type appConfig from './config/app.config.js';
  * compose) without changing NODE_ENV itself.
  */
 export function resolveSwaggerEnabled(
-  config: ConfigType<typeof appConfig>,
+  config: Pick<ConfigType<typeof appConfig>, 'nodeEnv' | 'swaggerEnabledRaw'>,
 ): boolean {
   if (config.swaggerEnabledRaw === 'true') {
     return true;

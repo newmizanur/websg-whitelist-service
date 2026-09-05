@@ -2,7 +2,6 @@ import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { createHmac } from 'node:crypto';
 import request from 'supertest';
-import { App } from 'supertest/types';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module.js';
 import { TENANT_ID_HEADER } from '../src/whitelist/auth/stub-tenant-auth.guard.js';
@@ -19,7 +18,7 @@ import { WEBHOOK_SIGNATURE_HEADER } from '../src/whitelist/webhooks/webhook-sign
 const WEBHOOK_SECRET = process.env.WHITELIST_WEBHOOK_SECRET as string;
 
 describe('Whitelist API (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
   let dataSource: DataSource;
 
   beforeAll(async () => {
