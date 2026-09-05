@@ -1,22 +1,22 @@
-export const SWAGGER_ENABLED_ENV_VAR = 'WHITELIST_SWAGGER_ENABLED';
+import type { ConfigType } from '@nestjs/config';
+import type appConfig from './config/app.config.js';
 
 /**
  * Whether to mount /api/docs. Defaults to enabled everywhere except
  * NODE_ENV=production (the docs expose internal shape, including the
  * webhook contract, that shouldn't be publicly browsable there) — but that
- * default can be overridden explicitly either way via the env var, e.g. to
- * turn it on for a specific production-labeled environment (docker compose)
- * without changing NODE_ENV itself.
+ * default can be overridden explicitly either way via WHITELIST_SWAGGER_ENABLED,
+ * e.g. to turn it on for a specific production-labeled environment (docker
+ * compose) without changing NODE_ENV itself.
  */
 export function resolveSwaggerEnabled(
-  env: Record<string, string | undefined> = process.env,
+  config: ConfigType<typeof appConfig>,
 ): boolean {
-  const raw = env[SWAGGER_ENABLED_ENV_VAR];
-  if (raw === 'true') {
+  if (config.swaggerEnabledRaw === 'true') {
     return true;
   }
-  if (raw === 'false') {
+  if (config.swaggerEnabledRaw === 'false') {
     return false;
   }
-  return env.NODE_ENV !== 'production';
+  return config.nodeEnv !== 'production';
 }

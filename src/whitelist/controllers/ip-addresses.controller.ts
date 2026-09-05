@@ -12,9 +12,12 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import {
+  ApiAcceptedResponse,
   ApiHeader,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiProperty,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -26,12 +29,19 @@ import { TenantId } from '../auth/tenant-id.decorator.js';
 import { UpdateIpAddressesDto } from '../dto/update-ip-addresses.dto.js';
 import {
   IpAddressesService,
-  type RequestStatusResult,
+  RequestStatusResult,
 } from '../services/ip-addresses.service.js';
 
-export interface SubmitIpAddressesResponse {
+export class SubmitIpAddressesResponse {
+  @ApiProperty({ example: 'wl_3fa85f64-5717-4562-b3fc-2c963f66afa6' })
   requestId: string;
+
+  @ApiProperty({ enum: ['queued'] })
   status: 'queued';
+
+  @ApiProperty({
+    example: '/api/whitelist/requests/wl_3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
   statusUrl: string;
 }
 
@@ -65,17 +75,9 @@ export class IpAddressesController {
       'Validates the request and queues it for the batching worker (system_design.md sections 3a and 3c); ' +
       'does not apply synchronously. Poll the returned statusUrl for progress.',
   })
-  @ApiResponse({
-    status: 202,
+  @ApiAcceptedResponse({
     description: 'Accepted — the request has been queued.',
-    schema: {
-      example: {
-        requestId: 'wl_3fa85f64-5717-4562-b3fc-2c963f66afa6',
-        status: 'queued',
-        statusUrl:
-          '/api/whitelist/requests/wl_3fa85f64-5717-4562-b3fc-2c963f66afa6',
-      },
-    },
+    type: SubmitIpAddressesResponse,
   })
   @ApiResponse({
     status: 400,
@@ -109,25 +111,9 @@ export class IpAddressesController {
     description: 'The requestId returned by POST /api/whitelist/ip-addresses.',
     example: 'wl_3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
-  @ApiResponse({
-    status: 200,
+  @ApiOkResponse({
     description: 'The current status of every entry covered by this request.',
-    schema: {
-      example: {
-        requestId: 'wl_3fa85f64-5717-4562-b3fc-2c963f66afa6',
-        status: 'pending',
-        submittedBy: 'tenant_123',
-        entries: [
-          { ip: '8.8.8.8/32', action: 'add', status: 'queued' },
-          { ip: '1.1.1.0/24', action: 'add', status: 'committed' },
-          {
-            ip: '8.8.4.4/32',
-            action: 'remove',
-            status: 'removed from your account',
-          },
-        ],
-      },
-    },
+    type: RequestStatusResult,
   })
   @ApiResponse({
     status: 404,

@@ -1,3 +1,11 @@
+/**
+ * Deliberately NOT part of src/config/ (the ConfigModule/registerAs setup
+ * used everywhere else — see app.module.ts/worker.module.ts) — BATCH_INTERVAL_MS
+ * below feeds `@Interval(BATCH_INTERVAL_MS)` in batch-publisher.service.ts, an
+ * @nestjs/schedule decorator argument evaluated when that module loads,
+ * before Nest's DI container exists. Same constraint as whitelist.config.ts's
+ * MAX_ENTRIES_PER_REQUEST — see the comment there.
+ */
 export const BATCH_INTERVAL_MS_ENV_VAR = 'WHITELIST_BATCH_INTERVAL_MS';
 export const DEFAULT_BATCH_INTERVAL_MS = 30_000;
 

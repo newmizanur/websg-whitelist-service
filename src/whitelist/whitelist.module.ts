@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import githubPublisherConfig from '../config/github-publisher.config.js';
 import { StubTenantAuthGuard } from './auth/stub-tenant-auth.guard.js';
 import { IpAddressesController } from './controllers/ip-addresses.controller.js';
 import { WhitelistEntry } from './entities/whitelist-entry.entity.js';
@@ -29,7 +30,8 @@ import { TerraformApplyModule } from './webhooks/terraform-apply.module.js';
     StubTenantAuthGuard,
     {
       provide: WHITELIST_PUBLISHER,
-      useFactory: () => createWhitelistPublisher(),
+      useFactory: createWhitelistPublisher,
+      inject: [githubPublisherConfig.KEY],
     },
   ],
   exports: [TypeOrmModule, BatchPublisherService, WHITELIST_PUBLISHER],

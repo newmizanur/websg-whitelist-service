@@ -1,20 +1,21 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-export const WEBHOOK_SECRET_ENV_VAR = 'WHITELIST_WEBHOOK_SECRET';
 export const WEBHOOK_SIGNATURE_HEADER = 'x-hub-signature-256';
 
-export function resolveWebhookSecret(
-  env: Record<string, string | undefined> = process.env,
-): string | undefined {
-  return env[WEBHOOK_SECRET_ENV_VAR];
-}
+/**
+ * DI token for the resolved webhook secret string (see webhookConfig and the
+ * provider factory in TerraformApplyModule) — a plain `string` type can't be
+ * a Nest injection token on its own, hence the dedicated symbol.
+ */
+export const WEBHOOK_SECRET_TOKEN = Symbol('WHITELIST_WEBHOOK_SECRET');
 
 interface WebhookRequest {
   headers: Record<string, string | string[] | undefined>;
@@ -32,7 +33,8 @@ interface WebhookRequest {
 export class WebhookSignatureGuard implements CanActivate {
   constructor(
     @Optional()
-    private readonly secret: string | undefined = resolveWebhookSecret(),
+    @Inject(WEBHOOK_SECRET_TOKEN)
+    private readonly secret?: string,
   ) {}
 
   canActivate(context: ExecutionContext): boolean {

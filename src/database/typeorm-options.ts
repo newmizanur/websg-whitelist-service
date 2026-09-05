@@ -1,20 +1,25 @@
+import type { ConfigType } from '@nestjs/config';
 import type { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import type databaseConfig from '../config/database.config.js';
 import { WhitelistEntry } from '../whitelist/entities/whitelist-entry.entity.js';
 import { WhitelistPublicationState } from '../whitelist/entities/whitelist-publication-state.entity.js';
 
 /**
  * Shared Postgres connection config for both running processes (the HTTP API
  * in AppModule and the standalone batching worker in WorkerModule) — each
- * calls TypeOrmModule.forRoot() with this exactly once, per process.
+ * wires this via TypeOrmModule.forRootAsync({ inject: [databaseConfig.KEY],
+ * useFactory: createTypeOrmOptions }) exactly once, per process.
  */
-export function createTypeOrmOptions(): TypeOrmModuleOptions {
+export function createTypeOrmOptions(
+  config: ConfigType<typeof databaseConfig>,
+): TypeOrmModuleOptions {
   return {
     type: 'postgres',
-    host: process.env.DB_HOST ?? 'localhost',
-    port: Number(process.env.DB_PORT ?? 5432),
-    username: process.env.DB_USERNAME ?? 'postgres',
-    password: process.env.DB_PASSWORD ?? 'postgres',
-    database: process.env.DB_NAME ?? 'websg_whitelist',
+    host: config.host,
+    port: config.port,
+    username: config.username,
+    password: config.password,
+    database: config.name,
     entities: [WhitelistEntry, WhitelistPublicationState],
     synchronize: false,
   };

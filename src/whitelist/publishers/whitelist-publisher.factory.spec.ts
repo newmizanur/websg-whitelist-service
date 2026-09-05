@@ -2,50 +2,58 @@ import { describe, expect, it } from 'vitest';
 import { GitHubPublisher } from './github.publisher.js';
 import { NoopPublisher } from './noop.publisher.js';
 import {
-  GITHUB_BRANCH_ENV_VAR,
-  GITHUB_OWNER_ENV_VAR,
-  GITHUB_PATH_ENV_VAR,
-  GITHUB_REPO_ENV_VAR,
-  GITHUB_TOKEN_ENV_VAR,
   createWhitelistPublisher,
   resolveGitHubPublisherConfig,
 } from './whitelist-publisher.factory.js';
 
-const FULL_ENV = {
-  [GITHUB_OWNER_ENV_VAR]: 'websg',
-  [GITHUB_REPO_ENV_VAR]: 'infra',
-  [GITHUB_TOKEN_ENV_VAR]: 'gh-token',
+const FULL_CONFIG = {
+  owner: 'websg',
+  repo: 'infra',
+  token: 'gh-token',
+  path: 'cms-whitelist/ip_whitelist.tfvars.json',
+  branch: 'main',
 };
 
 describe('resolveGitHubPublisherConfig', () => {
   it('returns undefined when owner, repo, or token is missing', () => {
-    expect(resolveGitHubPublisherConfig({})).toBeUndefined();
     expect(
-      resolveGitHubPublisherConfig({ [GITHUB_OWNER_ENV_VAR]: 'websg' }),
+      resolveGitHubPublisherConfig({
+        owner: undefined,
+        repo: undefined,
+        token: undefined,
+        path: 'cms-whitelist/ip_whitelist.tfvars.json',
+        branch: 'main',
+      }),
     ).toBeUndefined();
     expect(
       resolveGitHubPublisherConfig({
-        [GITHUB_OWNER_ENV_VAR]: 'websg',
-        [GITHUB_REPO_ENV_VAR]: 'infra',
+        owner: 'websg',
+        repo: undefined,
+        token: undefined,
+        path: 'cms-whitelist/ip_whitelist.tfvars.json',
+        branch: 'main',
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveGitHubPublisherConfig({
+        owner: 'websg',
+        repo: 'infra',
+        token: undefined,
+        path: 'cms-whitelist/ip_whitelist.tfvars.json',
+        branch: 'main',
       }),
     ).toBeUndefined();
   });
 
   it('returns a config with default path and branch when only the required vars are set', () => {
-    expect(resolveGitHubPublisherConfig(FULL_ENV)).toEqual({
-      owner: 'websg',
-      repo: 'infra',
-      token: 'gh-token',
-      path: 'cms-whitelist/ip_whitelist.tfvars.json',
-      branch: 'main',
-    });
+    expect(resolveGitHubPublisherConfig(FULL_CONFIG)).toEqual(FULL_CONFIG);
   });
 
   it('uses the path and branch overrides when provided', () => {
     const config = resolveGitHubPublisherConfig({
-      ...FULL_ENV,
-      [GITHUB_PATH_ENV_VAR]: 'custom/path.json',
-      [GITHUB_BRANCH_ENV_VAR]: 'whitelist-updates',
+      ...FULL_CONFIG,
+      path: 'custom/path.json',
+      branch: 'whitelist-updates',
     });
 
     expect(config?.path).toBe('custom/path.json');
@@ -55,13 +63,19 @@ describe('resolveGitHubPublisherConfig', () => {
 
 describe('createWhitelistPublisher', () => {
   it('returns a NoopPublisher when GitHub config is incomplete', () => {
-    const publisher = createWhitelistPublisher({});
+    const publisher = createWhitelistPublisher({
+      owner: undefined,
+      repo: undefined,
+      token: undefined,
+      path: 'cms-whitelist/ip_whitelist.tfvars.json',
+      branch: 'main',
+    });
 
     expect(publisher).toBeInstanceOf(NoopPublisher);
   });
 
   it('returns a GitHubPublisher when GitHub config is complete', () => {
-    const publisher = createWhitelistPublisher(FULL_ENV);
+    const publisher = createWhitelistPublisher(FULL_CONFIG);
 
     expect(publisher).toBeInstanceOf(GitHubPublisher);
   });
