@@ -12,6 +12,11 @@ nothing in this repository ever runs `terraform apply` against it.
   module that would consume that file to manage a single `aws_wafv2_ip_set`
   (section 3d). It has a placeholder state backend and no real AWS credentials, and
   is not a complete module.
+- `send-webhook.js` — real, dependency-free script that HMAC-signs and sends the
+  terraform-apply webhook payload. Not illustrative — it's the actual script
+  `.github/workflows/whitelist-apply.yml`'s "Notify whitelist service" step
+  runs, and it's also how you'd manually exercise the webhook against a
+  running backend (see README's webhook section).
 
 The GitHub Actions workflow that would run against this module lives at the
 repo root, `.github/workflows/whitelist-apply.yml` — real, functional YAML

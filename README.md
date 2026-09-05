@@ -7,6 +7,23 @@ Terraform-managed source — so updates still flow through the platform's existi
 GitOps + review model. Full design rationale (options considered, blast-radius decisions) lives in
 [`docs/system_design.md`](docs/system_design.md); this README covers setup and the API as built.
 
+## Tech Stack
+
+Exact pins live in `package.json`, `Dockerfile.api`/`Dockerfile.worker`, and `docker-compose.yml` —
+this is just the quick-scan summary:
+
+| Component | Version |
+| --- | --- |
+| Node.js | 24 |
+| Package manager | pnpm 9.12.1 |
+| Framework | NestJS 12 |
+| Language | TypeScript 6 |
+| Database | PostgreSQL 16 |
+| ORM | TypeORM 1.1 |
+| Validation | class-validator / class-transformer |
+| Testing | Vitest 4 (unit/integration + e2e), Supertest |
+| IP/CIDR parsing | ipaddr.js |
+
 ## Local setup
 
 ```bash
@@ -179,6 +196,19 @@ Internal only — called by `.github/workflows/whitelist-apply.yml` after `terra
 signature over the raw request body with `WHITELIST_WEBHOOK_SECRET`; anything else gets `401`
 before the payload is read.
 
+`WHITELIST_WEBHOOK_SECRET` is a **shared secret** — it must be set to the same value here and as a
+GitHub Actions repo secret in the (real) infra repo, alongside a second secret,
+`WHITELIST_WEBHOOK_URL`, pointing at wherever this backend is actually reachable from GitHub's
+runners. That's a real deployment concern this exercise doesn't address, since nothing here is
+deployed publicly (assumption 6). To exercise this endpoint manually against a running backend —
+without hand-rolling a curl/openssl HMAC signature — run
+[`infra-reference/send-webhook.js`](infra-reference/send-webhook.js), the same script the workflow
+itself runs:
+
+```bash
+WHITELIST_WEBHOOK_SECRET=changeme node infra-reference/send-webhook.js
+```
+
 ```
 POST /api/whitelist/webhooks/terraform-apply
 X-Hub-Signature-256: sha256=...
@@ -261,7 +291,7 @@ What's manually verified (not part of the automated suite):
 
 - The full lifecycle against a real Postgres: `docker compose up` → migrate → start API + worker →
   `POST` an add → row is `queued` → a worker cycle logs the generated JSON via `NoopPublisher` and
-  moves it to `committed` → a manually-signed webhook call moves it to `applied` → `GET` confirms it.
+  moves it to `committed` → `infra-reference/send-webhook.js` moves it to `applied` → `GET` confirms it.
 
 Explicitly out of scope, per [`docs/system_design.md` section 6](docs/system_design.md#6-testing-plan):
 

@@ -48,25 +48,18 @@ jobs:
 
       # section 3a step 5 / section 6: report the outcome back to the whitelist service so
       # it can move the covered rows from committed to applied/failed.
+      #
+      # WHITELIST_WEBHOOK_URL/SECRET are GitHub Actions repo secrets in the
+      # (real) infra repo — WHITELIST_WEBHOOK_SECRET must be set to the exact
+      # same value as the backend's own WHITELIST_WEBHOOK_SECRET, and
+      # WHITELIST_WEBHOOK_URL must be a URL these runners can actually reach
+      # (a public one), which this exercise doesn't stand up — see
+      # send-webhook.js's docstring and docs/system_design.md assumption 6.
       - name: Notify whitelist service
         if: always()
         env:
           WHITELIST_WEBHOOK_URL: ${{ secrets.WHITELIST_WEBHOOK_URL }}
           WHITELIST_WEBHOOK_SECRET: ${{ secrets.WHITELIST_WEBHOOK_SECRET }}
-        run: |
-          status="success"
-          if [ "${{ steps.apply.outcome }}" != "success" ]; then
-            status="failure"
-          fi
-
-          body=$(jq -n --arg status "$status" --arg commitSha "${{ github.sha }}" \
-            '{status: $status, commitSha: $commitSha}')
-
-          signature="sha256=$(printf '%s' "$body" \
-            | openssl dgst -sha256 -hmac "$WHITELIST_WEBHOOK_SECRET" \
-            | sed 's/^.* //')"
-
-          curl -fsSL -X POST "$WHITELIST_WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -H "X-Hub-Signature-256: $signature" \
-            -d "$body"
+          STATUS: ${{ steps.apply.outcome == 'success' && 'success' || 'failure' }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: node send-webhook.js
