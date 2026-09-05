@@ -80,6 +80,51 @@ pnpm start:worker   # batching worker, no HTTP server (src/worker.ts)
 Swagger UI is on by default here (`NODE_ENV` isn't `production`), at
 [`localhost:3000/api/docs`](http://localhost:3000/api/docs).
 
+### Quick smoke test
+
+The e2e suite already proves this lifecycle programmatically (add/remove, shared-IP handling,
+every webhook outcome) — this is just the fast, visible path for seeing it happen live, once the
+API and worker are running (either path above). Swagger UI's "Try it out" at `/api/docs` works
+identically for the two tenant-facing calls below, if you'd rather click than paste.
+
+```bash
+# 1. Add two IPs
+REQUEST_ID=$(curl -s -X POST localhost:3000/api/whitelist/ip-addresses \
+  -H "x-tenant-id: tenant_demo" -H "Content-Type: application/json" \
+  -d '{"add": ["9.9.9.9", "4.2.2.0/24"], "remove": []}' | jq -r .requestId)
+# no jq? copy requestId from the printed response instead
+
+# 2. Check status — both entries queued
+curl -s localhost:3000/api/whitelist/requests/$REQUEST_ID -H "x-tenant-id: tenant_demo"
+```
+
+Wait for the worker's next batch cycle (`WHITELIST_BATCH_INTERVAL_MS`, default `30000`ms — set it
+lower, e.g. `5000`, for a faster demo loop) and watch its log (`docker compose logs -f worker`, or
+the terminal running `pnpm start:worker`) for `NoopPublisher`'s `Fake commit sha: ...` line. Both
+entries move to `committed`.
+
+```bash
+# 3. Complete the loop — moves the commit's entries to applied
+WHITELIST_WEBHOOK_SECRET=changeme COMMIT_SHA=<sha from the log> node infra-reference/send-webhook.js
+
+# 4. Confirm — both entries applied
+curl -s localhost:3000/api/whitelist/requests/$REQUEST_ID -H "x-tenant-id: tenant_demo"
+
+# 5. Remove one of them — resolves instantly, no batch cycle or webhook needed for this part
+REMOVE_REQUEST_ID=$(curl -s -X POST localhost:3000/api/whitelist/ip-addresses \
+  -H "x-tenant-id: tenant_demo" -H "Content-Type: application/json" \
+  -d '{"add": [], "remove": ["9.9.9.9"]}' | jq -r .requestId)
+
+# 6. Confirm — 9.9.9.9 shows "removed from your account" under this new request id
+curl -s localhost:3000/api/whitelist/requests/$REMOVE_REQUEST_ID -H "x-tenant-id: tenant_demo"
+```
+
+Step 6 uses a new request id, not the one from step 1 — `remove` (like `add`) reassigns an
+existing row's `requestId` to whichever request most recently touched it, so 9.9.9.9 no longer
+shows up under the original id once it's been removed under a new one. (`9.9.9.9`/`4.2.2.0/24`
+are deliberately different from the API contract examples above — reusing those would trigger the
+shared-IP "still active - held by another tenant" branch instead if you'd tried both.)
+
 ### Tests
 
 Needs `pnpm install` plus a migrated Postgres (`docker compose up -d postgres && pnpm
