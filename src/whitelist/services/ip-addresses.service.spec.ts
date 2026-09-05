@@ -1,15 +1,15 @@
 import type { Repository } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  REMOVED_FROM_ACCOUNT,
+  STILL_ACTIVE_FOR_ANOTHER_TENANT,
+} from '../dto/request-status-result.dto.js';
 import { UpdateIpAddressesDto } from '../dto/update-ip-addresses.dto.js';
 import {
   WhitelistEntry,
   WhitelistEntryStatus,
 } from '../entities/whitelist-entry.entity.js';
-import {
-  REMOVED_FROM_ACCOUNT,
-  STILL_ACTIVE_FOR_ANOTHER_TENANT,
-  IpAddressesService,
-} from './ip-addresses.service.js';
+import { IpAddressesService } from './ip-addresses.service.js';
 
 function makeEntry(
   overrides: Partial<WhitelistEntry> & { tenantId: string; ip: string },

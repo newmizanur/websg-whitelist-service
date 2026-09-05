@@ -4,15 +4,13 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
+import type { RequestStatusResult } from '../dto/request-status-result.dto.js';
 import {
   MAX_ENTRIES_PER_REQUEST,
   UpdateIpAddressesDto,
 } from '../dto/update-ip-addresses.dto.js';
 import { WhitelistEntryStatus } from '../entities/whitelist-entry.entity.js';
-import type {
-  IpAddressesService,
-  RequestStatusResult,
-} from '../services/ip-addresses.service.js';
+import type { IpAddressesService } from '../services/ip-addresses.service.js';
 import { IpAddressesController } from './ip-addresses.controller.js';
 
 function makeDto(add: string[], remove: string[]): UpdateIpAddressesDto {

@@ -17,7 +17,6 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
-  ApiProperty,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -26,24 +25,10 @@ import {
   TENANT_ID_HEADER,
 } from '../auth/stub-tenant-auth.guard.js';
 import { TenantId } from '../auth/tenant-id.decorator.js';
+import { RequestStatusResult } from '../dto/request-status-result.dto.js';
+import { SubmitIpAddressesResponse } from '../dto/submit-ip-addresses-response.dto.js';
 import { UpdateIpAddressesDto } from '../dto/update-ip-addresses.dto.js';
-import {
-  IpAddressesService,
-  RequestStatusResult,
-} from '../services/ip-addresses.service.js';
-
-export class SubmitIpAddressesResponse {
-  @ApiProperty({ example: 'wl_3fa85f64-5717-4562-b3fc-2c963f66afa6' })
-  requestId: string;
-
-  @ApiProperty({ enum: ['queued'] })
-  status: 'queued';
-
-  @ApiProperty({
-    example: '/api/whitelist/requests/wl_3fa85f64-5717-4562-b3fc-2c963f66afa6',
-  })
-  statusUrl: string;
-}
+import { IpAddressesService } from '../services/ip-addresses.service.js';
 
 @ApiTags('whitelist')
 @ApiHeader({
