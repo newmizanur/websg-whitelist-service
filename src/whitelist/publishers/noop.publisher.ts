@@ -11,7 +11,12 @@ export class NoopPublisher implements WhitelistPublisher {
   ) {}
 
   async publish(content: string): Promise<PublishResult> {
-    this.logger.log(`Skipping real publish; would write:\n${content}`);
-    return { commitSha: randomBytes(20).toString('hex') };
+    const commitSha = randomBytes(20).toString('hex');
+    this.logger.log(
+      `Skipping real publish; would write:\n${content}\n\n` +
+        `Fake commit sha: ${commitSha} — pass it as COMMIT_SHA to ` +
+        `infra-reference/send-webhook.js to simulate a successful terraform apply.`,
+    );
+    return { commitSha };
   }
 }

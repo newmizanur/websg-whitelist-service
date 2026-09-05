@@ -34,4 +34,15 @@ describe('NoopPublisher', () => {
 
     expect(first.commitSha).not.toBe(second.commitSha);
   });
+
+  it('logs the fake commit sha, so it can drive a manual webhook call without querying the DB', async () => {
+    const logger = makeLogger();
+    const publisher = new NoopPublisher(logger);
+
+    const result = await publisher.publish('content');
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.stringContaining(result.commitSha),
+    );
+  });
 });

@@ -2,9 +2,10 @@
 
 Tenants currently need a service request to add or remove IPs on the shared AWS WAF whitelist that
 gates CMS access. This service replaces that: tenants submit add/remove requests, the backend
-validates and queues them, and a scheduled worker batches changes into one Git commit against the
-Terraform-managed source — so updates still flow through the platform's existing Terraform +
-GitOps + review model. Full design rationale (options considered, blast-radius decisions) lives in
+validates and queues them, and a scheduled worker batches changes into one commit **to a GitHub
+repository** (via the GitHub REST Contents API — see `GitHubPublisher`) against the
+Terraform-managed source, so updates still flow through the platform's existing Terraform + GitOps
++ review model. Full design rationale (options considered, blast-radius decisions) lives in
 [`docs/system_design.md`](docs/system_design.md); this README covers setup and the API as built.
 
 ## Tech Stack
@@ -33,7 +34,11 @@ cp .env.example .env        # fill in WHITELIST_WEBHOOK_SECRET at minimum
 No infra repo to point at (e.g. just reviewing this submission)? Leave
 `WHITELIST_GITHUB_OWNER`/`REPO`/`TOKEN` unset — the worker falls back to `NoopPublisher`
 (`src/whitelist/publishers/noop.publisher.ts`), logging the generated `ip_whitelist.tfvars.json`
-instead of committing it. Applies to either path below.
+instead of committing it. Nothing is written anywhere, but entry status still advances to
+`committed` — the batching worker doesn't distinguish a real commit from a `NoopPublisher` one, it
+just needs *a* commit sha back. `NoopPublisher` logs that fake sha specifically so you can drive
+[`infra-reference/send-webhook.js`](infra-reference/send-webhook.js) without querying the DB for it
+— see that script's `COMMIT_SHA` option. Applies to either path below.
 
 Pick **one** path, not both — running two workers at once is the exact concurrent-run race
 [section 3c](docs/system_design.md#3c-batching-commits)'s single-replica assumption avoids.
@@ -202,11 +207,15 @@ GitHub Actions repo secret in the (real) infra repo, alongside a second secret,
 runners. That's a real deployment concern this exercise doesn't address, since nothing here is
 deployed publicly (assumption 6). To exercise this endpoint manually against a running backend —
 without hand-rolling a curl/openssl HMAC signature — run
-[`infra-reference/send-webhook.js`](infra-reference/send-webhook.js), the same script the workflow
-itself runs:
+[`infra-reference/send-webhook.js`](infra-reference/send-webhook.js) (parameters and full usage in
+its own README entry), the same script the workflow itself runs. Its default `COMMIT_SHA` is a
+placeholder that matches nothing, so left unset you'll just get a `200` no-op — pass the real sha
+you want to confirm (e.g. the one `NoopPublisher` logs, per above) to actually move an entry to
+`applied`:
 
 ```bash
-WHITELIST_WEBHOOK_SECRET=changeme node infra-reference/send-webhook.js
+WHITELIST_WEBHOOK_SECRET=changeme COMMIT_SHA=<sha from the worker's log or a real commit> \
+  node infra-reference/send-webhook.js
 ```
 
 ```
