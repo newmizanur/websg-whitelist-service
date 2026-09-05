@@ -35,12 +35,12 @@ jobs:
       DB_NAME: websg_whitelist
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Node 24 to match the Dockerfiles; corepack reads package.json's
       # packageManager field to fetch the pinned pnpm version, same as
       # Dockerfile.api/Dockerfile.worker's `deps` stage.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
 
