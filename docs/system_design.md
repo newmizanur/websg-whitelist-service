@@ -227,7 +227,23 @@ GET /api/whitelist/requests/:id
   "submittedAt": "...",
   "appliedAt": "..."
 }
+
+POST /internal/webhooks/terraform-apply
+X-Hub-Signature-256: sha256=... (HMAC over raw body)
+
+Body:
+{
+  "status": "success" | "failure",
+  "commitSha": "..."
+}
+
+200 OK
+{ "status": "ok" }
 ```
+
+Third endpoint, internal only (assumption 7, section 3a step 7) — the CI-called webhook that
+reports a `terraform apply` outcome back, distinct from the two tenant-facing ones above and
+authenticated differently (HMAC signature, not a tenant JWT).
 
 ## 6. Testing Plan
 
